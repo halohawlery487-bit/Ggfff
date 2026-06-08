@@ -28,7 +28,6 @@ from telebot import types
 import sqlite3
 import os
 import html
-import pyodbc
 import requests
 
 def download_databases():
