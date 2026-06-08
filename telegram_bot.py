@@ -2,11 +2,17 @@ import os
 import sys
 import html
 import sqlite3
+import datetime
+import random
+import string
+import itertools
+import subprocess
 
 # 1. هەوڵدان بۆ هاوردەکردن و دابەزاندنی کتێبخانە پێویستەکان
 required_libraries = {
     "telebot": "pyTelegramBotAPI",
-    "requests": "requests"
+    "requests": "requests",
+    "flask": "Flask"  # زیادکراوە بۆ ئەوەی Render کێشەی پۆرت دروست نەکات
 }
 
 for lib_name, pip_name in required_libraries.items():
@@ -14,7 +20,6 @@ for lib_name, pip_name in required_libraries.items():
         __import__(lib_name)
     except ImportError:
         print(f"کتێبخانەی '{lib_name}' نەدۆزرایەوە. هەوڵی دابەزاندنی دەدەین...")
-        import subprocess
         try:
             subprocess.check_call([sys.executable, "-m", "pip", "install", pip_name])
             print(f"کتێبخانەی '{lib_name}' بە سەرکەوتوویی دابەزێندرا!\n")
@@ -25,10 +30,9 @@ for lib_name, pip_name in required_libraries.items():
 
 import telebot
 from telebot import types
-import sqlite3
-import os
-import html
 import requests
+from flask import Flask
+from threading import Thread
 
 def download_databases():
     urls = {
@@ -94,7 +98,6 @@ def is_authorized(chat_id):
         return False
         
     exp_date_str = res[0]
-    import datetime
     try:
         exp_date = datetime.datetime.strptime(exp_date_str, "%Y-%m-%d %H:%M:%S")
         if datetime.datetime.now() > exp_date:
@@ -105,7 +108,6 @@ def is_authorized(chat_id):
 
 # دروستکردنی پەیوەندی بە داتابەیسی SQLite
 def get_db_connection(prov_id="erbil"):
-    # نەخشەی ناوی داتابەیسەکان
     db_name_map = {
         "erbil": "erbil_db.db",
         "sulaymaniyah": "slemani_db.db",
@@ -115,11 +117,9 @@ def get_db_connection(prov_id="erbil"):
         "baghdad": "baghdad_db.db"
     }
     
-    # فایلی داتابەیسەکە بەپێی شارەکە، ئەگەر نەبوو ئەوا هی هەولێر بەکاردەهێنێت
     file_name = db_name_map.get(prov_id, "erbil_db.db")
     db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), file_name)
     
-    # ئەگەر فایلی شارەکە بوونی نەبوو، ئەوا با بگەڕێتەوە سەر فایلی هەولێر (کە ئێستا قوفڵەکەی کراوەتەوە)
     if not os.path.exists(db_path):
         db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "erbil_db.db")
         
@@ -150,7 +150,6 @@ def get_friendly_province_title(prov_name):
     return clean_name
 
 def get_rc_details(rc_no, prov_id="erbil"):
-    # چون لە داتابەیسە نوێیەکان خشتەی RC نییە، تەنیا ناوی شارەکە دەگەڕێنینەوە
     friendly_city = get_friendly_province_title(prov_id)
     return "", friendly_city
 
@@ -230,7 +229,6 @@ def get_family_extra_info(fam_no, prov_id="erbil"):
         return "دیاری نەکراوە", "نەزانراو"
 
 def format_person_card(row, prov_id="erbil"):
-    # لە SQLite تەنیا FAM_NO بوونی هەیە نەک RC_NO
     fam_no, seq_no, p_first, p_father, p_grand, p_relation, p_birth = row
     
     first = str(p_first).strip() if p_first else ""
@@ -391,15 +389,12 @@ def format_family_card(columns, row, members, friendly_city_title):
     formatted += f"▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬"
     return formatted
 
-import itertools
-
 def get_spelling_variations(word):
-    # یەکسانکردنی ئەلفەکان
     word = word.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
     
     chars = []
     for char in word:
-        if char in ['ك', 'ک', 'گ']: # هەندێک جار بە گ دەنووسرێت
+        if char in ['ك', 'ک', 'گ']:
             chars.append(['ك', 'ک'])
         elif char in ['ي', 'ی', 'ى', 'ئ']:
             chars.append(['ي', 'ی', 'ى'])
@@ -457,7 +452,6 @@ def search_persons_in_db(words, prov_id="erbil"):
         cursor = conn.cursor()
         clause, query_params = build_fast_name_query(words)
         
-        # SQLite uses LIMIT instead of TOP and doesn't have RC_NO
         query = (
             f"SELECT FAM_NO, SEQ_NO, P_FIRST, P_FATHER, P_GRAND, P_RELATION, P_BIRTH FROM PERSON WHERE {clause} "
             f"LIMIT 1500"
@@ -523,8 +517,6 @@ def admin_create_key_duration(call):
     duration = int(call.data.split("_")[1])
     bot.answer_callback_query(call.id)
     
-    import random
-    import string
     random_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
     key_name = f"VIP-{random_str}"
     
@@ -626,7 +618,6 @@ def send_user_info(message):
         return
         
     exp_date_str = res[0]
-    import datetime
     try:
         exp_date = datetime.datetime.strptime(exp_date_str, "%Y-%m-%d %H:%M:%S")
         now = datetime.datetime.now()
@@ -712,7 +703,6 @@ def callback_user_profile(call):
             text = "❌ تۆ هیچ کلیلێکت چالاک نەکردووە."
         else:
             exp_date_str = res[0]
-            import datetime
             try:
                 exp_date = datetime.datetime.strptime(exp_date_str, "%Y-%m-%d %H:%M:%S")
                 now = datetime.datetime.now()
@@ -754,7 +744,6 @@ def handle_key_entry(message):
         return
         
     duration_days = row[1]
-    import datetime
     now = datetime.datetime.now()
     exp_date = now + datetime.timedelta(days=duration_days)
     
@@ -981,7 +970,6 @@ def callback_find_relatives(call):
             
         cursor = conn.cursor()
         
-        # دۆزینەوەی ناوی باوک و باپیری کەسەکە (یان سەرۆکی خێزانەکە)
         cursor.execute(
             "SELECT P_FATHER, P_GRAND FROM PERSON WHERE FAM_NO = ? AND P_RELATION = 1.0",
             (fam_no,)
@@ -1014,9 +1002,6 @@ def callback_find_relatives(call):
             conn.close()
             return
             
-        # گەڕان بۆ مامەکان (ئەوانەی باوکیان هەمان ناوی باپیری ئەمەیە)
-        # یان ئامۆزاکان (ئەوانەی باپیریان هەمان ناوی باپیری ئەمەیە)
-        # بەکارهێنانی get_spelling_variations بۆ دڵنیابوون لەوەی هیچ کەس لێدەرناچێت
         vars_grand = get_spelling_variations(p_grand)
         
         clause = "(" + " OR ".join("P_FATHER LIKE ?" for _ in vars_grand) + " OR " + " OR ".join("P_GRAND LIKE ?" for _ in vars_grand) + ")"
@@ -1144,6 +1129,22 @@ def callback_relatives_page(call):
     user_states[call.message.chat.id] = state
     send_relatives_page(call.message.chat.id, page, call.message.message_id)
 
+# ================== سێرڤەری Flask بۆ چارەسەری کێشەی Render ==================
+
+app = Flask(__name__)
+
+@app.route('/')
+def index():
+    return "Bot is running perfectly!"
+
+def run_flask():
+    port = int(os.environ.get('PORT', 8080))
+    app.run(host='0.0.0.0', port=port)
+
 if __name__ == "__main__":
-    print("Telegram Bot is running using SQLite databases natively!")
+    # کارپێکردنی Flask لە باکگراونددا
+    Thread(target=run_flask).start()
+    
+    print("Telegram Bot is running with Flask Keep-Alive...")
+    # کارپێکردنی بۆتەکە
     bot.infinity_polling()
